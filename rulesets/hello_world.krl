@@ -1,6 +1,9 @@
 ruleset hello_world {
     meta {
       name "Hello World"
+      description <<
+  A first ruleset for the Quickstart
+  >>
       author "Phil Windley"
       shares hello
     }
