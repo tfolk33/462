@@ -1,9 +1,6 @@
 ruleset hello_world {
     meta {
       name "Hello World"
-      description <<
-  A first ruleset for the Quickstart
-  >>
       author "Phil Windley"
       shares hello
     }
@@ -19,4 +16,5 @@ ruleset hello_world {
       select when echo hello
       send_directive("say", {"something": "Hello World"})
     }
+     
   }
