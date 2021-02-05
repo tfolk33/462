@@ -27,5 +27,5 @@ ruleset twilio_app {
             ent:lastTimestamp := time:now()
             raise message event "Message Sent" attributes event:attrs
         }
-      }
+    }
 }
