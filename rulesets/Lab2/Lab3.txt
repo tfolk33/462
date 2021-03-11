@@ -1,0 +1,31 @@
+Rulesets:
+https://github.com/tfolk33/462/blob/main/rulesets/Lab3/twilio.krl
+https://github.com/tfolk33/462/blob/main/rulesets/Lab3/wovyn_base.krl
+
+1-
+I choose to parse the rulesets by installing them into the pico.
+
+2-
+I choose to accomplish step 5 with a rule conditional statement. I like this beacuse it is more like what I am used to from other programming languages. Compared to an event expression there is an advantage of having the code seperated from the select. The disadvantage of the rule conditional is that there is more complexity in programming.
+
+3-
+Before the find_high_temps rule was added the testing output was the data from the wovyn sensor and a single directive. I believe that the only rule that ran was the process_heartbeat rule.
+
+4-
+When the find_high_temps rule was added I still recieved a single directive. However, there was information from both of the process_heartbeat and find_high_temps rules. Therfore, I beleive that two rules ran.
+
+5-
+The reason that there was one directive but two rules is that the rules were chained together. This means that the second rule's directives were returned back to the first which were then returned to the pico. Diagram uploaded as seperate file.
+
+
+6-
+Yes, the find_high_temps rule is an event itermediary. I would classify it as a conditional intermediary because it takes the output of one event, a heartbeat reading, and inteprets it with a conditional statement and which determines if it will pass it to the next event, sending a notification to the end user that the temperature exceeded the threshold.
+
+7-
+These lines really show that the find_high_temps was fired:
+22:57:08.674Z [debug] rule selected wovyn_base : find_high_temps
+22:57:08.674Z [klog] TEMP:  70.47
+22:57:08.674Z [debug] fired 
+22:57:08.675Z [debug] event added to schedule {"eci":"ckkq3njrp001doouac74ugnu4","domain":"wovyn","name":"threshold_violation","data":{"attrs":{"temperature":70.47,"timestamp":"2021-02-05T22:57:08.672Z"}},"time":1612565828675}
+
+The first line shows that it was selected, the Klog is showing us the temperature that was read and passed from process_heartbeat, next we see that the event fired which is good because 70.47 is greater than my threshold of 60, and finally the postlude of the find_high_temps fires the threshold_violation rule as we expect.

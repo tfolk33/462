@@ -6,15 +6,12 @@ ruleset wovyn_base {
         An Rulest for Lab3
       >>
 
-      use module twilio alias t
-        with
-          SID = meta:rulesetConfig{"SID"}
-          authToken = meta:rulesetConfig{"auth"}
+      use module io.picolabs.subscription alias subs
+
+      use module sensor_profile alias sensor
     }
 
     global {
-        temperature_threshold = 60
-        to_num = "+14438129301"
         from_num = "+19014727182"
     }
   
@@ -36,6 +33,7 @@ ruleset wovyn_base {
         pre {
             temperatureF = event:attrs{"temperature"}[0]{"temperatureF"}
             timestamp = event:attrs{"timestamp"}
+            temperature_threshold = sensor:threshold_temp()
         }
         if (temperatureF.klog("TEMP: ") > temperature_threshold) then every {
             send_directive("say", {"something":"New Threshold Violation!"}) 
@@ -50,16 +48,17 @@ ruleset wovyn_base {
         select when wovyn threshold_violation 
 
         pre {
+            eci = subs:established()[0]{"Tx"}.klog()
             temperature = event:attrs{"temperature"}
             timestamp = event:attrs{"timestamp"}
+            temperature_threshold = sensor:threshold_temp()
             msg = "Temperature " + temperature + " exceeded limit of " + temperature_threshold + " at " + timestamp
         }
-        t:sendMessage(to_num, from_num, msg) setting(response)
-        
-        fired {
-            ent:lastResponse := response
-            ent:lastTimestamp := time:now()
-            raise message event "Message Sent" attributes event:attrs
-        }
+        event:send({"eci":eci,
+          "domain":"manager", "name":"threshold_violation",
+          "attrs": {
+            "msg":msg
+          }
+        })
     }
 }

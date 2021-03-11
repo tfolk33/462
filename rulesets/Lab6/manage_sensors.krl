@@ -8,8 +8,15 @@ ruleset manage_sensor {
 
       use module io.picolabs.wrangler alias wrangler
 
-      provides sensors, query_temps, query_temp, query_sensor_profile
-      shares sensors, query_temps, query_temp, query_sensor_profile
+      use module io.picolabs.subscription alias subs
+
+      use module twilio alias t
+        with
+          SID = meta:rulesetConfig{"SID"}
+          authToken = meta:rulesetConfig{"auth"}
+
+      provides sensors, query_temps, query_temp, query_sensor_profile, parent
+      shares sensors, query_temps, query_temp, query_sensor_profile, parent
     }
 
     global {
@@ -17,11 +24,15 @@ ruleset manage_sensor {
             ent:sensors.defaultsTo({})
         }
 
-        default_threshold = 70
+        parent = function (){
+            ent:parent_wk.defaultsTo(subs:wellKnown_Rx(){"id"})
+        }
+
+        default_threshold = 60
 
         query_temps = function(){
-            children = wrangler:children()
-            result = children.map(function(res){ctx:query(res{"eci"}, "temperature_store", "temperatures")})
+            subs = subs:established().klog()
+            result = subs.map(function(res){ctx:query(res{"Tx"}, "temperature_store", "temperatures")})
             result
         }
 
@@ -40,17 +51,44 @@ ruleset manage_sensor {
         }
     }
 
+    rule threshold_notification {
+        select when manager threshold_violation 
+
+        pre {
+            msg = event:attrs{"msg"}
+        }
+        t:sendMessage(msg) setting(response)
+        fired {
+            ent:lastResponse := response.klog()
+        }
+    }
+
+    rule make_a_subscription {
+        select when manager new_subscription_request
+        pre {
+            sub_wellKnown = event:attrs{"sub_wellKnown"}
+        }
+        event:send({"eci":subs:wellKnown_Rx(){"id"},
+          "domain":"wrangler", "name":"subscription",
+          "attrs": {
+            "wellKnown_Tx":sub_wellKnown,
+            "Rx_role":"subscription", "Tx_role":"sensor",
+            "name":"subscription", "channel_type":"subscription"
+          }
+        })
+    }
+
     rule manage_sensors {
         select when sensor new_sensor 
 
         pre {
             sensor_name = event:attrs{"SensorName"}
             body = { "name": sensor_name }.klog()
-            //Check existing names of sensors
-            exists = ent:sensors.filter(function(v,k){v==sensor_name}).klog()
+            // Check existing names of sensors
+            exists = ent:sensors.filter(function(v,k){v==sensor_name})
         }
         if exists == {} then noop()
-        fired {
+        always {
             raise wrangler event "new_child_request"
             attributes body
         }
@@ -79,7 +117,6 @@ ruleset manage_sensor {
         {
             raise manager event "update_profile" 
             attributes { "name":name, "eci":eci}
-            
         }
     }
 
@@ -89,7 +126,7 @@ ruleset manage_sensor {
         pre {
             eci = event:attrs{"eci"}
             name  = event:attrs{"name"}
-
+            wk = subs:wellKnown_Rx(){"id"}
         }
         if name then
         event:send(
@@ -99,6 +136,7 @@ ruleset manage_sensor {
               "attrs": {
                   "absoluteURL": "file:///Users/TFolk/repos/462/rulesets/Lab4/sensor_profiles.krl",
                   "rid": "sensor_profile",
+                  "wellKnown_Rx": wk
               }
             }
         )
@@ -205,6 +243,9 @@ ruleset manage_sensor {
             body = {"SensorName":name, "ThresholdTemp":default_threshold}
         }
         ctx:event(eci, "sensor", "profile_updated", body)
+        fired
+        {
+            raise manager event "get_parent_wellKnown" attributes {}
+        }
     }
-    
 }

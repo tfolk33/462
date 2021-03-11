@@ -10,11 +10,13 @@ ruleset wovyn_base {
         with
           SID = meta:rulesetConfig{"SID"}
           authToken = meta:rulesetConfig{"auth"}
+
+      use module sensor_profile alias sensor
     }
 
     global {
-        temperature_threshold = 74
-        to_num = "+14438129301"
+        temperature_threshold = sensor:sensor_name
+        to_num = sensor:contact_number
         from_num = "+19014727182"
     }
   
