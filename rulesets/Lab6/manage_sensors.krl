@@ -15,8 +15,8 @@ ruleset manage_sensor {
           SID = meta:rulesetConfig{"SID"}
           authToken = meta:rulesetConfig{"auth"}
 
-      provides sensors, query_temps, query_temp, query_sensor_profile, parent
-      shares sensors, query_temps, query_temp, query_sensor_profile, parent
+      provides sensors, query_temps, query_temp, query_sensor_profile, parent, sensorList, report
+      shares sensors, query_temps, query_temp, query_sensor_profile, parent, sensorList, report
     }
 
     global {
@@ -49,6 +49,82 @@ ruleset manage_sensor {
                     "Contact Number":contact_number, "Threshold Temperature":threshold_temperature}
             ret 
         }
+
+        temp_reports = function(){
+            ent:temp_reps.defaultsTo({})
+        }
+
+        sensorList = function(){
+            subs:established().filter(function(res){res{"Tx_role"}=="sensor"}).klog()
+        }
+
+        report = function(){
+            ent:report.defaultsTo([]).reverse().slice(4)
+        }
+    }
+
+    rule request_temperature_report {
+        select when manager temperature_report_start
+        pre {
+          rcn = "RID-"+math:floor(time:strftime(time:now({ "tz" : "UTC" }), "%s")/10).klog()
+          augmented_attrs = event:attrs.put(["report_correlation_number"], rcn)
+        }
+        fired {
+          raise manager event "temperature_report_routable"
+            attributes augmented_attrs
+        }
+    }
+
+    rule process_temperature_report_with_rcn {
+        select when manager temperature_report_routable
+        foreach sensorList() setting(sensor)
+          pre {
+            rcn = event:attr("report_correlation_number")
+            eci = sensor{"Tx"}.klog()
+            rx = sensor{"Rx"}
+          }
+          if(not rcn.isnull()) then
+          event:send({"eci": eci,
+            "domain": "temp", "name":"periodic_temperature_report",
+            "attrs": {
+              "report_correlation_number": rcn,
+              "rx": rx
+            }
+          })
+    }
+
+    rule catch_periodic_temperature_reports {
+        select when manager periodic_temperature_report_created
+      
+        pre {
+          sensor_id = event:attr("sender_id")
+          rcn = event:attr("report_correlation_number")
+          temperature = event:attrs{"temperature"}
+          body = {"Sensor":sensor_id, "Temperature":temperature{"Temperature"}, "Timestamp":temperature{"Timestamp"}}
+        }
+        always {
+          ent:temp_reps{rcn} := ent:temp_reps{rcn}.append(body)
+          raise manager event "calculate_report"
+        }
+      
+    }
+
+    rule calculate_report {
+        select when manager calculate_report
+      
+        foreach temp_reports() setting(report_val, report_key)
+            pre {
+                sensors_num = sensorList().length()
+                sensors_reported = report_val.tail().length()
+                append_result = {"RCN":report_key, "Data":report_val.tail()}.klog()
+            }
+            if ( sensors_num <= sensors_reported) then 
+            noop()
+            fired {
+                ent:report := ent:report.append(append_result)
+            } else {
+               log info "we're still waiting for " + (sensors_num - sensors_reported) + " reports"
+            }
     }
 
     rule threshold_notification {
@@ -85,10 +161,11 @@ ruleset manage_sensor {
             sensor_name = event:attrs{"SensorName"}
             body = { "name": sensor_name }.klog()
             // Check existing names of sensors
-            exists = ent:sensors.filter(function(v,k){v==sensor_name})
+            sensors_all = sensors().klog()
+            exists = sensors_all.filter(function(v,k){v==sensor_name}).klog()
         }
         if exists == {} then noop()
-        always {
+        fired {
             raise wrangler event "new_child_request"
             attributes body
         }
