@@ -64,10 +64,10 @@ ruleset sensor_profile {
     rule auto_accept {
         select when wrangler inbound_pending_subscription_added
         pre {
-          my_role = event:attr("Rx_role")
-          their_role = event:attr("Tx_role")
+          my_role = event:attr("Rx_role").klog()
+          their_role = event:attr("Tx_role").klog()
         }
-        if my_role=="sensor" && their_role=="subscription" then noop()
+        if ((my_role=="sensor" && their_role=="subscription") || (my_role == "node" && their_role == "node")) then noop()
         fired {
           raise wrangler event "pending_subscription_approval"
             attributes event:attrs
