@@ -49,6 +49,16 @@ ruleset sensor_profile {
         }
     }
 
+    rule update_threshold {
+      select when sensor update_threshold
+      pre {
+        new_temp = event:attrs{"NewThreshold"}
+      }
+      fired {
+        ent:threshold_temp := new_temp
+      }
+  }
+
     rule make_a_subscription {
         select when sensor new_subscription_request
         event:send({"eci":ent:wellKnown_Rx,
